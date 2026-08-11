@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lista de Tareas Interactiva</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 650px;
+            position: relative;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 25px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        li {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            margin-bottom: 10px;
+            padding: 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.1s;
+            display: flex;
+            align-items: center;
+            color: #333;
+            font-size: 1.05em;
+            position: relative;
+        }
+        li:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .task-text.completed {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+        .task-number {
+            font-weight: bold;
+            margin-right: 12px;
+            color: #666;
+        }
+        /* Colores de Fondo */
+        li.bg-rosado { background-color: #f8d7da !important; border-color: #f5c6cb; }
+        li.bg-verde { background-color: #d4edda !important; border-color: #c3e6cb; }
+        li.bg-amarillo { background-color: #fff3cd !important; border-color: #ffeeba; }
+        li.bg-celeste { background-color: #d1ecf1 !important; border-color: #bee5eb; }
+        li.bg-violeta { background-color: #e2d9f3 !important; border-color: #d6c7f0; }
+
+        /* Menú contextual flotante */
+        .color-menu {
+            display: none;
+            position: absolute;
+            background: white;
+            border: 1px solid #ccc;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border-radius: 8px;
+            padding: 10px;
+            z-index: 1000;
+            flex-direction: column;
+            gap: 8px;
+            width: 200px;
+        }
+        .menu-option {
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s;
+        }
+        .menu-option:hover {
+            background-color: #f0f0f0;
+        }
+        .color-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+        .dot-rosado { background-color: #f8d7da; }
+        .dot-verde { background-color: #d4edda; }
+        .dot-amarillo { background-color: #fff3cd; }
+        .dot-celeste { background-color: #d1ecf1; }
+        .dot-violeta { background-color: #e2d9f3; }
+        .dot-blanco { background-color: #ffffff; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Lista de Tareas</h1>
+    <ul id="task-list"></ul>
+</div>
+
+<!-- Menú flotante -->
+<div id="action-menu" class="color-menu">
+    <div class="menu-option" onclick="toggleStrikethrough()">
+        <strong>✏️ Tachar / Destachar</strong>
+    </div>
+    <hr style="margin: 2px 0; border: none; border-top: 1px solid #eee;">
+    <div class="menu-option" onclick="setColor('rosado')"><span class="color-dot dot-rosado"></span> Rosado</div>
+    <div class="menu-option" onclick="setColor('verde')"><span class="color-dot dot-verde"></span> Verde</div>
+    <div class="menu-option" onclick="setColor('amarillo')"><span class="color-dot dot-amarillo"></span> Amarillo</div>
+    <div class="menu-option" onclick="setColor('celeste')"><span class="color-dot dot-celeste"></span> Celeste</div>
+    <div class="menu-option" onclick="setColor('violeta')"><span class="color-dot dot-violeta"></span> Violeta</div>
+    <div class="menu-option" onclick="setColor('none')"><span class="color-dot dot-blanco"></span> Quitar color</div>
+</div>
+
+<script>
+    const tareas = [
+        "Vaciar Roboto",
+        "Sacudir el sillón",
+        "Levantar cosas del piso",
+        "Levantar cables",
+        "Limpiar y ordenar mesa principal y manteles",
+        "Limpiar y ordenar mesa teléfono",
+        "Limpiar y ordenar mesa lámpara",
+        "Subir sillas (poner remeras en el dormitorio principal, toalla colgada afuera)",
+        "Bajar sillas",
+        "Barrer detrás de las puertas"
+    ];
+
+    const taskListUl = document.getElementById('task-list');
+    const menu = document.getElementById('action-menu');
+    let selectedTask = null;
+
+    // Generar lista
+    tareas.forEach((tarea, index) => {
+        const li = document.createElement('li');
+        
+        const spanNumber = document.createElement('span');
+        spanNumber.className = 'task-number';
+        spanNumber.textContent = `${index + 1}-`;
+        
+        const spanText = document.createElement('span');
+        spanText.className = 'task-text';
+        spanText.textContent = tarea;
+
+        li.appendChild(spanNumber);
+        li.appendChild(spanText);
+
+        li.addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectedTask = li;
+            
+            // Posicionar menú cerca del clic
+            menu.style.top = `${e.pageY}px`;
+            menu.style.left = `${Math.min(e.pageX, window.innerWidth - 220)}px`;
+            menu.style.display = 'flex';
+        });
+
+        taskListUl.appendChild(li);
+    });
+
+    // Cerrar menú al hacer clic afuera
+    document.addEventListener('click', () => {
+        menu.style.display = 'none';
+    });
+
+    // Función para tachar/destachar
+    function toggleStrikethrough() {
+        if (selectedTask) {
+            const textSpan = selectedTask.querySelector('.task-text');
+            textSpan.classList.toggle('completed');
+        }
+        menu.style.display = 'none';
+    }
+
+    // Función para cambiar color de fondo
+    function setColor(color) {
+        if (selectedTask) {
+            // Limpiar colores previos
+            selectedTask.classList.remove('bg-rosado', 'bg-verde', 'bg-amarillo', 'bg-celeste', 'bg-violeta');
+            
+            if (color !== 'none') {
+                selectedTask.classList.add(`bg-${color}`);
+            }
+        }
+        menu.style.display = 'none';
+    }
+</script>
+
+</body>
+</html>
