@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lista de Tareas Interactiva</title>
+    <title>Lista de Tareas Compartida en Tiempo Real</title>
+    <!-- SDK de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -115,7 +117,7 @@
 <body>
 
 <div class="container">
-    <h1>Lista de Tareas</h1>
+    <h1>Lista de Tareas Compartida</h1>
     <ul id="task-list"></ul>
 </div>
 
@@ -134,77 +136,119 @@
 </div>
 
 <script>
-    const tareas = [
-        "Vaciar Roboto",
-        "Sacudir el sillón",
-        "Levantar cosas del piso",
-        "Levantar cables",
-        "Limpiar y ordenar mesa principal y manteles",
-        "Limpiar y ordenar mesa teléfono",
-        "Limpiar y ordenar mesa lámpara",
-        "Subir sillas (poner remeras en el dormitorio principal, toalla colgada afuera)",
-        "Bajar sillas",
-        "Barrer detrás de las puertas"
-    ];
+    // Configuración de Supabase
+    const SUPABASE_URL = 'https://kjhcpbndtzumzzmhxvjw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqaGNwYm5kdHp1bXp6bWh4dmp3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0MzM5NDEsImV4cCI6MjEwMjAwOTk0MX0.LiIE0cCIuNflxplwCw5xCUj5xnimKyWR6OVC49NQunM';
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     const taskListUl = document.getElementById('task-list');
     const menu = document.getElementById('action-menu');
-    let selectedTask = null;
+    let selectedTaskId = null;
 
-    // Generar lista
-    tareas.forEach((tarea, index) => {
-        const li = document.createElement('li');
-        
-        const spanNumber = document.createElement('span');
-        spanNumber.className = 'task-number';
-        spanNumber.textContent = `${index + 1}-`;
-        
-        const spanText = document.createElement('span');
-        spanText.className = 'task-text';
-        spanText.textContent = tarea;
-
-        li.appendChild(spanNumber);
-        li.appendChild(spanText);
-
-        li.addEventListener('click', (e) => {
-            e.stopPropagation();
-            selectedTask = li;
+    // Renderizar la lista completa en el DOM
+    function renderTasks(tasks) {
+        taskListUl.innerHTML = '';
+        tasks.sort((a, b) => a.id - b.id).forEach((task) => {
+            const li = document.createElement('li');
+            li.dataset.id = task.id;
             
-            // Posicionar menú cerca del clic
-            menu.style.top = `${e.pageY}px`;
-            menu.style.left = `${Math.min(e.pageX, window.innerWidth - 220)}px`;
-            menu.style.display = 'flex';
+            if (task.color && task.color !== 'none') {
+                li.classList.add(`bg-${task.color}`);
+            }
+
+            const spanNumber = document.createElement('span');
+            spanNumber.className = 'task-number';
+            spanNumber.textContent = `${task.id}-`;
+
+            const spanText = document.createElement('span');
+            spanText.className = 'task-text';
+            if (task.completed) spanText.classList.add('completed');
+            spanText.textContent = task.text;
+
+            li.appendChild(spanNumber);
+            li.appendChild(spanText);
+
+            li.addEventListener('click', (e) => {
+                e.stopPropagation();
+                selectedTaskId = task.id;
+                menu.style.top = `${e.pageY}px`;
+                menu.style.left = `${Math.min(e.pageX, window.innerWidth - 220)}px`;
+                menu.style.display = 'flex';
+            });
+
+            taskListUl.appendChild(li);
         });
+    }
 
-        taskListUl.appendChild(li);
-    });
+    // Cargar tareas iniciales desde Supabase
+    async function loadTasks() {
+        const { data, error } = await supabaseClient.from('tasks').select('*');
+        if (!error && data) {
+            renderTasks(data);
+        }
+    }
 
-    // Cerrar menú al hacer clic afuera
+    // Tachar/Destachar en Supabase
+    async function toggleStrikethrough() {
+        if (selectedTaskId) {
+            const li = document.querySelector(`li[data-id="${selectedTaskId}"]`);
+            const isCompleted = li.querySelector('.task-text').classList.contains('completed');
+            
+            await supabaseClient
+                .from('tasks')
+                .update({ completed: !isCompleted })
+                .eq('id', selectedTaskId);
+        }
+        menu.style.display = 'none';
+    }
+
+    // Cambiar color en Supabase
+    async function setColor(color) {
+        if (selectedTaskId) {
+            await supabaseClient
+                .from('tasks')
+                .update({ color: color })
+                .eq('id', selectedTaskId);
+        }
+        menu.style.display = 'none';
+    }
+
+    // Suscripción a cambios en Tiempo Real
+    supabaseClient
+        .channel('schema-db-changes')
+        .on(
+            'postgres_changes',
+            { event: 'UPDATE', schema: 'public', table: 'tasks' },
+            (payload) => {
+                const updatedTask = payload.new;
+                const li = document.querySelector(`li[data-id="${updatedTask.id}"]`);
+                if (li) {
+                    const textSpan = li.querySelector('.task-text');
+                    
+                    // Actualizar tachado
+                    if (updatedTask.completed) {
+                        textSpan.classList.add('completed');
+                    } else {
+                        textSpan.classList.remove('completed');
+                    }
+
+                    // Actualizar color
+                    li.classList.remove('bg-rosado', 'bg-verde', 'bg-amarillo', 'bg-celeste', 'bg-violeta');
+                    if (updatedTask.color && updatedTask.color !== 'none') {
+                        li.classList.add(`bg-${updatedTask.color}`);
+                    }
+                }
+            }
+        )
+        .subscribe();
+
+    // Ocultar menú flotante
     document.addEventListener('click', () => {
         menu.style.display = 'none';
     });
 
-    // Función para tachar/destachar
-    function toggleStrikethrough() {
-        if (selectedTask) {
-            const textSpan = selectedTask.querySelector('.task-text');
-            textSpan.classList.toggle('completed');
-        }
-        menu.style.display = 'none';
-    }
-
-    // Función para cambiar color de fondo
-    function setColor(color) {
-        if (selectedTask) {
-            // Limpiar colores previos
-            selectedTask.classList.remove('bg-rosado', 'bg-verde', 'bg-amarillo', 'bg-celeste', 'bg-violeta');
-            
-            if (color !== 'none') {
-                selectedTask.classList.add(`bg-${color}`);
-            }
-        }
-        menu.style.display = 'none';
-    }
+    // Inicializar
+    loadTasks();
 </script>
 
 </body>
